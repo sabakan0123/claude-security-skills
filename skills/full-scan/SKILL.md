@@ -1,5 +1,5 @@
 ---
-description: "リリース前の全ファイル静的解析スキル。プロジェクト構造を自動検出し、ソースモジュールごとのサブエージェントと依存関係スキャンを並列実行してコードベース全体の脆弱性を検出する。手動呼び出し専用: /full-scan"
+description: "リリース前の全ファイル静的解析スキル。プロジェクト構造を自動検出し、ソースモジュールごとのサブエージェントと依存関係スキャンを並列実行してコードベース全体の脆弱性を検出する。.security-owners.json が存在する場合は GitHub イシューを自動作成してチームメンバーにアサインする。手動呼び出し専用: /full-scan"
 disable-model-invocation: true
 ---
 
@@ -20,6 +20,8 @@ disable-model-invocation: true
 | 引数 | 必須 | 説明 |
 |------|------|------|
 | `対象パス` | 任意 | 明示的にスキャンしたいディレクトリ（省略時は自動検出） |
+| `--confidence N` | 任意 | 報告する最低信頼度（デフォルト: 8、範囲: 1〜10） |
+| `--no-issues` | 任意 | GitHub イシューの自動作成をスキップする |
 
 ---
 
@@ -37,13 +39,20 @@ disable-model-invocation: true
 2. **言語・フレームワークの検出**
    - マニフェストファイルの内容（dependencies / devDependencies 等）からフレームワークを特定する
    - 例: `next` → Next.js、`express` → Express、`fastapi` → FastAPI、`rails` → Rails 等
+   - **Next.js App Router の検出**: `next` が依存関係にあり、かつ `src/app/api/` または `app/api/` ディレクトリが存在する場合、App Router プロジェクトと判定する。この場合 `app/api/` 配下のルートグループを機能ドメイン（`auth/`、`boards/`、`chat/`、`cron/` 等）ごとにサブエージェントへ分割することを推奨する。
 
-3. **モジュール分割の決定**
+3. **`.security-owners.json` の読み込み（存在する場合）**
+   - プロジェクトルートに `.security-owners.json` があれば読み込む
+   - このファイルは発見をチームメンバーへ自動アサインするための責任マッピングを定義する
+   - フォーマット: `templates/security-owners.example.json` を参照
+   - ファイルが存在しない場合はスキップし、Step 6 のイシュー作成では `owner` フィールドを空にする
+
+4. **モジュール分割の決定**
    - ソースディレクトリが複数ある場合（モノレポ等）: モジュールごとにサブエージェントを割り当てる
    - ソースディレクトリが1つの場合: サブエージェント1つで全体をカバーする
    - モジュールが4つ以上ある場合: 関連するモジュールをグループ化する（コンテキストコスト削減）
 
-4. **スキャン前にファイル一覧を確定する（必須）**:
+5. **スキャン前にファイル一覧を確定する（必須）**:
    - 各モジュールのソースファイルを `find` コマンドで列挙し、**総ファイル数を記録する**
    - この時点で確定した総ファイル数が、カバレッジ計算の分母になる
    - 「このスキャンは以下のモジュールを対象とします: [モジュール一覧] / 総ファイル数: [N]件」と明示する
@@ -81,7 +90,7 @@ disable-model-invocation: true
 - 未解析ファイルがある場合は **ファイルパスを全件列挙する**
 - `解析済み数 < 総数` の場合、結果を **PARTIAL SCAN** として明示する
 
-**検出対象（信頼度 8/10 以上のみ報告）:**
+**検出対象（`--confidence` で指定した閾値以上のみ報告、デフォルト 8/10）:**
 - **インジェクション**: SQL / NoSQL / コマンド / テンプレートインジェクション、パストラバーサル
 - **認証・認可の欠陥**: セッション管理・JWT 誤実装・認可バイパス・権限昇格
 - **ハードコードされた認証情報・API キー**: シークレット・接続文字列の平文埋め込み
@@ -128,7 +137,16 @@ disable-model-invocation: true
 **シークレット漏洩チェック:**
 - `gitleaks detect --source . --report-format json` を実行する
 - `trufflehog filesystem .` を代替として試みる
-- どちらもなければスキップして記録する
+- どちらもない場合はスキップして記録し、以下のインストール方法を案内する：
+  ```
+  # gitleaks
+  brew install gitleaks        # macOS
+  # または: https://github.com/gitleaks/gitleaks/releases
+
+  # trufflehog
+  brew install trufflehog      # macOS
+  pip install trufflehog       # Python
+  ```
 
 ---
 
@@ -207,6 +225,53 @@ ci_result: <pass/fail>
 
 4. High 以上の発見がある場合、終了コード 1 を報告する
 
+### Step 6: GitHub イシュー自動作成（`--no-issues` 未指定かつ gh CLI が利用可能な場合）
+
+> `--no-issues` が指定されている場合、または `gh` コマンドが見つからない場合はこの Step をスキップする。
+
+1. **`gh` CLI と認証の確認**
+   ```bash
+   gh auth status 2>/dev/null || echo "gh not authenticated"
+   ```
+   未認証の場合はスキップしてレポートにその旨を記載する。
+
+2. **`.security-owners.json` の解釈**
+   - Step 1 で読み込んだオーナーマッピングを使用する
+   - 各発見のファイルパスを `paths` パターンと照合し、`github_username` を特定する
+   - マッチしない場合は `default_owner` を使用する（未設定なら `assignee` なしでイシューを作成）
+
+3. **発見ごとに GitHub イシューを作成する**
+   - `severity:critical` / `severity:high` / `severity:medium` / `severity:low` ラベルが存在しない場合は自動作成する
+   - `security` ラベルも作成する
+   - 各発見を以下のフォーマットでイシューとして登録する：
+
+   ```
+   タイトル: [Security][<SEVERITY>] <発見のタイトル>
+
+   本文:
+   ## 概要
+   <Descriptionの内容>
+
+   ## 影響を受けるファイル
+   - `<file>:<line>`
+
+   ## 攻撃シナリオ
+   <Attackの内容>
+
+   ## 修正方法
+   <Fixの内容>
+   ```
+
+   ```bash
+   gh issue create \
+     --title "[Security][HIGH] ..." \
+     --body "..." \
+     --label "security,severity:high" \
+     --assignee "<github_username>"
+   ```
+
+4. **作成したイシューの URL 一覧をレポートに追記する**
+
 ---
 
 ## 3スキルの住み分け
@@ -240,3 +305,4 @@ ci_result: <pass/fail>
 - [ ] カバーできない領域が明示されている
 - [ ] `severity_gate` 基準に基づく CI 結果（pass / fail）が明示されている
 - [ ] `./security-reports/index.md` に1行追記されている
+- [ ] `--no-issues` 未指定かつ `gh` 認証済みの場合、各発見の GitHub イシューが作成されている

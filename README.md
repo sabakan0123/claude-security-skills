@@ -22,6 +22,10 @@ gh skill install sabakan0123/claude-security-skills
 
 実行すると、対話プロンプトでインストール先のエージェント（Claude Code / Cursor / Codex 等）とスコープ（ユーザー全体 / プロジェクト単位）を聞かれます。Claude Code の場合は `~/.claude/skills/` 配下に3つのスキルが配置されます。
 
+> [!IMPORTANT]
+> **インストール後は Claude Code を再起動してください。**
+> スキルの検出は会話の開始時に行われます。インストール中の会話セッションでは `/full-scan` 等のスラッシュコマンドを認識しないため、再起動が必要です。
+
 > [!NOTE]
 > `gh skill` は GitHub CLI **v2.90.0 以上** が必要です。
 > アップグレード: `brew upgrade gh`（macOS）または [GitHub CLI releases](https://github.com/cli/cli/releases) から手動インストール。
@@ -83,9 +87,32 @@ PR・ブランチの `git diff` を対象に、変更されたコードのみを
 
 **特徴:**
 - モノレポ対応（モジュールごとにサブエージェントを並列実行）
+- Next.js App Router の機能ドメイン別モジュール分割に対応
 - `npm audit` / `pip-audit` / `cargo audit` 等の依存関係スキャン
-- `gitleaks` によるシークレット漏洩チェック
+- `gitleaks` によるシークレット漏洩チェック（未インストール時はインストール手順を案内）
 - コンテキスト上限到達時は PARTIAL SCAN として明示
+- `.security-owners.json` によるチーム責任マッピングと GitHub イシュー自動作成
+
+**引数:**
+```
+/full-scan [対象パス] [--confidence N] [--no-issues]
+```
+- `--confidence N`: 報告する最低信頼度（デフォルト: 8）
+- `--no-issues`: GitHub イシューの自動作成をスキップ
+
+**チームへの GitHub イシュー自動作成:**
+
+プロジェクトルートに `.security-owners.json` を配置すると、発見をファイルパスのパターンでチームメンバーにマッピングし、GitHub イシューを自動作成・アサインします。
+
+```bash
+cp node_modules/.../templates/security-owners.example.json .security-owners.json
+# または
+curl -O https://raw.githubusercontent.com/sabakan0123/claude-security-skills/master/templates/security-owners.example.json
+mv security-owners.example.json .security-owners.json
+# .security-owners.json を編集してチームの GitHub ユーザー名を設定
+```
+
+テンプレート: [`templates/security-owners.example.json`](templates/security-owners.example.json)
 
 ---
 
@@ -190,6 +217,7 @@ claude-security-skills/
 │   └── security-scan.md
 ├── templates/
 │   ├── security-agent.config.template.yml  # /security-scan 設定テンプレート
+│   ├── security-owners.example.json        # チーム責任マッピング設定テンプレート
 │   └── security-skills-setup.md           # 新プロジェクト導入手順
 └── tests/
     └── security-skills/

@@ -1,0 +1,65 @@
+{
+  "_readme": "このファイルをプロジェクトルートに .security-owners.json としてコピーし、チームに合わせて編集してください。パスパターンは上から順に評価され、最初にマッチしたルールが適用されます。",
+
+  "default_owner": "",
+
+  "rules": [
+    {
+      "_comment": "認証・セッション・DB 設計担当",
+      "paths": [
+        "src/app/api/auth/**",
+        "src/app/api/profile/**",
+        "src/app/api/users/**",
+        "src/app/api/verification/**",
+        "src/lib/auth/**",
+        "src/lib/firebase/**",
+        "src/lib/session*",
+        "src/lib/csrf*"
+      ],
+      "owner": "pepper-github-username",
+      "label": "area:auth"
+    },
+    {
+      "_comment": "掲示板バックエンド担当",
+      "paths": [
+        "src/app/api/boards/**",
+        "src/app/api/moderation/**",
+        "src/app/api/admin/**",
+        "src/app/api/notifications/**",
+        "src/app/api/cron/**",
+        "src/lib/boards/**",
+        "src/lib/moderation/**",
+        "src/lib/notifications/**",
+        "src/lib/permissions/**"
+      ],
+      "owner": "soya-github-username",
+      "label": "area:board"
+    },
+    {
+      "_comment": "チャット・DM 担当",
+      "paths": [
+        "src/app/api/chat/**",
+        "src/app/api/channels/**",
+        "src/lib/chat/**",
+        "src/components/chat/**",
+        "src/app/chat/**"
+      ],
+      "owner": "haruto-github-username",
+      "label": "area:chat"
+    },
+    {
+      "_comment": "UI・フロントエンド担当",
+      "paths": [
+        "src/components/ui/**",
+        "src/components/board/**",
+        "src/components/layout/**",
+        "src/app/**/*.tsx",
+        "src/hooks/**",
+        "src/lib/analytics/**",
+        "next.config.*"
+      ],
+      "owner": "ray-github-username",
+      "label": "area:ui"
+    }
+  ]
+}
